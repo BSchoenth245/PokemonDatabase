@@ -1,0 +1,24 @@
+{
+  "name": "pokemondatabase",
+  "version": "1.0.0",
+  "main": "index2.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BSchoenth245/PokemonDatabase.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/BSchoenth245/PokemonDatabase/issues"
+  },
+  "homepage": "https://github.com/BSchoenth245/PokemonDatabase#readme",
+  "description": "",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "mysql": "^2.18.1"
+  }
+}

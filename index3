@@ -1,0 +1,2057 @@
+//EXAMPLE CODE GIVEN TO ME AS REFERENCE
+
+
+const express = require('express');
+const cors = require('cors');
+const {v4:uuidv4} = require('uuid');
+const mysql = require('mysql');
+const bcrypt = require('bcrypt');
+const HTTP_PORT = 8000;
+const intSalt = 10;
+const intLogLevl = 1; 
+
+const conCEROC = mysql.createPool({
+    host: "localhost",
+    user: "ceroc",
+    password: "Mickey2024!",
+    database: "ceroc"
+});
+
+var app = express();
+app.use(cors());
+app.use(express.json());    
+
+class Session {
+    constructor(strSessionID, objUser, arrPermissions, strDateTimeStart, strLastUsedDateTime){
+        this.sessionid = strSessionID;
+        this.user = objUser;
+        this.permissions = arrPermissions;
+        this.datetimestart = strDateTimeStart;
+        this.datetimelastused = strLastUsedDateTime;
+    }
+}
+
+class User {
+    constructor(strUserID, strEmail, strFirstName, strLastName){
+        this.userid = strUserID;
+        this.email = strEmail;
+        this.firstname = strFirstName;
+        this.lastname = strLastName;
+    }
+}
+
+class Permission {
+    constructor(strPermissionID, strDescription){
+        this.permissionid = strPermissionID;
+        this.description = strDescription;
+    }
+}
+
+class PhoneNumber {
+    constructor(strPhoneNumberID, strAreaCode,strPhoneNumber, strType){
+        this.phonenumberid = strPhoneNumberID;
+        this.areacode = strAreaCode;
+        this.phonenumber = strPhoneNumber;
+        this.type = strType;
+    }
+}
+
+class Address {
+    constructor(strAddressID, strStreet1, strStreet2, strCity, strState, strZip){
+        this.addressid = strAddressID;
+        this.street1 = strStreet1;
+        this.street2 = strStreet2;
+        this.city = strCity;
+        this.state = strState;
+        this.zip = strZip;
+    }
+}
+
+class Social {
+    constructor(strSocialID, strSocialType, strName, strURL){
+        this.socialid = strSocialID;
+        this.socialtype = strSocialType;
+        this.name = strName;
+        this.url = strURL;
+    }
+}
+
+class OrganizationType {
+    constructor(strOrganizationTypeID, strDescription){
+        this.organizationtypeid = strOrganizationTypeID;
+        this.description = strDescription;
+    }
+}
+
+class OrganizationRegion {
+    constructor(strRegionID, strDescription){
+        this.regionid = strRegionID;
+        this.description = strDescription;
+    }
+}
+
+class Organization {
+    constructor(strOrganizationID, strName, strRegion, strPrimaryPhone, strPrimaryEmail, strURL, arrOganizationType, arrOrganizationPhone, arrOrganizationAddress, arrOrganizationSocials){
+        this.organizationid = strOrganizationID;
+        this.name = strName;
+        this.region = strRegion;
+        this.primaryphone = strPrimaryPhone;
+        this.primaryemail = strPrimaryEmail;
+        this.url = strURL;
+        this.organizationtypes = arrOganizationType;
+        this.organizationphones = arrOrganizationPhone;
+        this.organizationaddresses = arrOrganizationAddress;
+        this.organizationsocials = arrOrganizationSocials;
+    }
+}
+
+function createLog(strLogType, strContent){
+    if(intLogLevl == 1){
+        //console.log(strLogType + ": " + strContent);
+    }
+    if(intLogLevl == 2){
+        //console.log(strLogType + ": " + strContent);
+    }
+    if(intLogLevl == 3 && strLogType == "ERROR"){
+        //console.log(strLogType + ": " + strContent);
+    }
+}
+
+function hashPassword(strPassword){
+    return bcrypt.hashSync(strPassword, intSalt);
+}
+
+function validatePassword(strPassword, strHash){
+    return bcrypt.compareSync(strPassword, strHash);
+}
+
+function verifySession (req) {
+    return true;
+    if (req.headers.authorization && req.headers.authorization.split(' ')[0] === 'Bearer') {
+        let strSessionID = req.headers.authorization.split(' ')[1];
+    } else if (req.query && req.query.token) {
+        //Build function to query database and gather information about the user including name and role
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblSessions LEFT JOIN tblUsers on tblSessions.UserID = tblUsers.UserID LEFT JOIN tblUserPermissions on tblSessions.UserID = tblUserPermissions.UserID';
+                
+                conCEROC.query(strCommand, [strPurchaseOrderItemCategoryID], function (err, result) {
+                    if(err){
+                        console.log("Error verifying session");
+                        console.log(err);
+                        
+                        return "error"
+                    } else {
+                        return result;
+                    }
+                });
+            }
+        });
+        return req.query.token;
+    }
+    return false;
+}
+
+app.get("/alive",(req,res,next) => {
+    res.status(200).json({message:"alive"});
+})
+
+app.get("/vendors/vendor/:vendorid",(req,res,next) => {
+    if(verifySession(req) == true){
+        let strVendorID = req.params.vendorid;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblVendors';
+                if(strVendorID != null){
+                    strCommand = 'SELECT * FROM tblVendors WHERE VendorID = ?';
+                }
+                conCEROC.query(strCommand, [strVendorID], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving vendor"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Vendor not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/organizations/:organizationid",(req,res,next) => {
+    if(verifySession(req) == true){
+        let strOrganizationID = req.params.organizationid;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                strCommand = 'SELECT * FROM tblOrganizations LEFT JOIN tblOrganizationType ON tlbOrganizations.OrganizationType = tblOrganizationType.TypeID WHERE OrganizationID = ?';
+                conCEROC.query(strCommand, [strOrganizationID], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving organization"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Organization not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/organizations",(req,res,next) => {
+    if(verifySession(req) == true){
+        let strOrganizationID = req.params.organizationid;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblOrganizations Order By Name ASC';
+                
+                conCEROC.query(strCommand, [], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving organization"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Organization not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/ambassadors/:ambassadorid",(req,res,next) => {
+    if(verifySession(req) == true){
+        let strAmbassadorID = req.params.ambassadorid;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblAmbassador';
+                if(strAmbassadorID != null){
+                    strCommand = 'SELECT * FROM tblAmbassador WHERE AmbassadorID = ?';
+                }
+                conCEROC.query(strCommand, [strAmbassadorID], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving ambassador"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Ambassador not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                    connection.release();
+                });
+            }
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/clientcontacts/:clientcontactid",(req,res,next) => {
+    if(verifySession(req) == true){
+        let strClientContactID = req.params.clientcontactid;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblClientContacts';
+                if(strClientContactID != null){
+                    strCommand = 'SELECT * FROM tblClientContacts WHERE ClientContactID = ?';
+                }
+                conCEROC.query(strCommand, [strClientContactID], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving client contact"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Client Contact not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/clientcontacts/",(req,res,next) => {
+    if(verifySession(req) == true){
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "SELECT * FROM ceroc.tblClientContacts LEFT JOIN ceroc.tblOrganizations ON tblClientContacts.Organization = tblOrganizations.OrganizationID LEFT JOIN tblClientContactEmail ON tblClientContacts.ContactID = tblClientContactEmail.ClientContactID LEFT JOIN tblClientContactPhone ON tblClientContacts.ContactID = tblClientContactPhone.ClientContactID WHERE tblClientContactEmail.Status = 'Active' AND tblClientContactPhone.Status = 'Active'";
+                conCEROC.query(strCommand, [], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving client contact"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Client Contact not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/inventory/item/:inventoryid",(req,res,next) => {
+    if(verifySession(req) == true){
+        let strInventoryID = req.params.inventoryid;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblInventory';
+                if(strInventoryID != null){
+                    strCommand = 'SELECT * FROM tblInventory WHERE InventoryID = ?';
+                }
+                conCEROC.query(strCommand, [strInventoryID], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving inventory"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Inventory not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/inventory/items",(req,res,next) => {
+    if(verifySession(req) == true){
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT InventoryID, tblInventory.Description as Name, tblInventory.MaxQty,tblInventory.MinQty,tblInventory.Status as ItemStatus, LocationID, tblInventoryLocation.Description as LocationDescription, BuildingRoom, Shelf, CategoryID, tblInventoryItemCategory.Description AS Category, AudienceID, tblInventoryItemAudience.Description AS Audience, tblInventory.Image, VendorID, tblVendors.Name AS Vendor FROM tblInventory LEFT JOIN tblInventoryItemCategory ON tblInventory.Category = tblInventoryItemCategory.CategoryID LEFT JOIN tblInventoryItemAudience ON tblInventory.Audience = tblInventoryItemAudience.AudienceID LEFT JOIN tblInventoryLocation ON tblInventory.Location = tblInventoryLocation.LocationID LEFT JOIN tblVendors on tblInventory.Vendor = tblVendors.VendorID';
+                conCEROC.query(strCommand, [], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving inventory"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Inventory not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/scholars/:scholarid",(req,res,next) => {
+    if(verifySession(req) == true){
+        let strScholarID = req.params.scholarid;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblScholar';
+                if(strScholarID != null){
+                    strCommand = 'SELECT * FROM tblScholar WHERE ScholarID = ?';
+                }
+                conCEROC.query(strCommand, [strScholarID], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving scholar"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Scholar not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/purchaseorders/:purchaseorderid",(req,res,next) => {
+    if(verifySession(req) == true){
+        let strPurchaseOrderID = req.params.purchaseorderid;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblPurchaseOrder';
+                if(strPurchaseOrderID != null){
+                    strCommand = 'SELECT * FROM tblPurchaseOrder WHERE PurchaseOrderID = ?';
+                }
+                conCEROC.query(strCommand, [strPurchaseOrderID], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving purchase order"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Purchase Order not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/scholarprograms/:scholarprogramid",(req,res,next) => {
+    if(verifySession(req) == true){
+        let strScholarProgramID = req.params.scholarprogramid;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblScholarPrograms';
+                if(strScholarProgramID != null){
+                    strCommand = 'SELECT * FROM tblScholarPrograms WHERE ScholarProgramID = ?';
+                }
+                conCEROC.query(strCommand, [strScholarProgramID], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving scholar program"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Scholar Program not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/organizationtypes/:organizationtypeid",(req,res,next) => {
+    createLog('INFO', "GET /organizationtypes/:organizationtypeid requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strOrganizationTypeID = req.params.organizationtypeid;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblOrganizationType WHERE OrganizationTypeID = ?';
+                
+                conCEROC.query(strCommand, [strOrganizationTypeID], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving organization type"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Organization Type not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.put("/organizationtypes",(req,res,next) => {
+    createLog('INFO', "GET /organizationtypes/:organizationtypeid requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strOrganizationTypeID = req.body.TypeID;
+        let strDescription = req.body.Description;
+        let strStatus = req.body.Status;
+
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'UPDATE tblOrganizationType SET Description = ?, Status = ? WHERE TypeID = ?';
+                
+                conCEROC.query(strCommand, [strDescription,strStatus,strOrganizationTypeID], function (err, result) {
+                    if(err){
+                        console.log("Error updating record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error updating organization type"});
+                    } else {
+                        res.status(200).json({status:"success",message:"Organization type updated"});
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.post("/organizationtypes",(req,res,next) => {
+    createLog('INFO', "POST /organizationtypes/:organizationtypeid requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strOrganizationTypeID = uuidv4();
+        let strDescription = req.body.Description;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblOrganizationType VALUES (?,?,'1')";
+                
+                conCEROC.query(strCommand, [strOrganizationTypeID, strDescription], function (err, result) {
+                    if(err){
+                        console.log("Error inserting record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error adding organization type"});
+                    } else {
+                        res.status(201).json({status:"success",message:"Organization type added"});
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.post("/organization",(req,res,next) => {
+    createLog('INFO', "POST /organization requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strOganizationID = uuidv4();
+        let strName = req.body.Name;
+        let strPrimaryPhone = req.body.PrimaryPhone;
+        let strPrimaryEmail = req.body.PrimaryEmail;
+        let strURL = req.body.URL;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblOrganizations VALUES (?,?,?,?,?)";
+                
+                conCEROC.query(strCommand, [strOganizationID, strName, strPrimaryPhone, strPrimaryEmail,strURL], function (err, result) {
+                    if(err){
+                        console.log("Error inserting record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error adding organization type"});
+                    } else {
+                        res.status(201).json({status:"success",message:"Organization added",organizationid:strOganizationID});
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.post("/organization/:organizationid/region",(req,res,next) => {
+    createLog('INFO', "POST /organization/:organizationid/region requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strOganizationID = req.params.organizationid;
+        let strOrganizationRegionID = uuidv4();
+        let strRegionID = req.body.RegionID;
+        
+        let strURL = req.body.URL;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblOrganizationRegionAssignment VALUES (?,?,?)";
+                
+                conCEROC.query(strCommand, [strOrganizationRegionID,strOganizationID,strRegionID], function (err, result) {
+                    if(err){
+                        console.log("Error inserting record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error adding organization assignment"});
+                    } else {
+                        res.status(201).json({status:"success",message:"Organization assignment added"});
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.post("/organization/:organizationid/social",(req,res,next) => {
+    createLog('INFO', "POST /organization/:organizationid/social requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strOganizationID = req.params.organizationid;
+        let strOrganizationSocialID = uuidv4();
+        let strSocialType = req.body.SocialType;
+        let strName = req.body.Name;
+        let strLink = req.body.Link;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblOrganizationSocials VALUES (?,?,?,?,?)";
+                
+                conCEROC.query(strCommand, [strOrganizationSocialID,strSocialType, strName, strLink, strOganizationID], function (err, result) {
+                    if(err){
+                        console.log("Error inserting record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error adding organization assignment"});
+                    } else {
+                        res.status(201).json({status:"success",message:"Organization assignment added"});
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.post("/organization/:organizationid/type",(req,res,next) => {
+    createLog('INFO', "POST /organization/:organizationid/type requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strOganizationID = req.params.organizationid;
+        let strOrganizationRegionID = uuidv4();
+        let strTypeID = req.body.TypeID;
+        
+        let strURL = req.body.URL;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblOrganizationTypeAssignment VALUES (?,?,?)";
+                
+                conCEROC.query(strCommand, [strOrganizationRegionID,strOganizationID,strTypeID], function (err, result) {
+                    if(err){
+                        console.log("Error inserting record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error adding organization assignment"});
+                    } else {
+                        res.status(201).json({status:"success",message:"Organization assignment added"});
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.post("/organization/:organizationid/address",(req,res,next) => {
+    createLog('INFO', "POST /organization/:organizationid/type requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strOganizationID = req.params.organizationid;
+        let strOrganizationAddressID = uuidv4();
+        let strStreet1 = req.body.Street1;
+        let strStreet2 = req.body.Street2;
+        let strCity = req.body.City;
+        let strCounty = req.body.County;
+        let strState = req.body.State;
+        let strZip = req.body.Zip;
+        
+        let strURL = req.body.URL;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblOrganizationAddress VALUES (?,?,?,?,?,?,?,?,'1','1')";
+                
+                conCEROC.query(strCommand, [strOrganizationAddressID,strOganizationID,strStreet1,strStreet2,strCity,strState,strZip,strCounty], function (err, result) {
+                    if(err){
+                        console.log("Error inserting record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error adding organization address"});
+                    } else {
+                        res.status(201).json({status:"success",message:"Organization address added"});
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.post("/organization/region",(req,res,next) => {
+    createLog('INFO', "POST /organization/region/:regionid requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strRegionID = uuidv4();
+        let strDescription = req.body.Description;
+ 
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblOrganizationRegions VALUES(?,?,'1')";
+                
+                conCEROC.query(strCommand, [strRegionID,strDescription], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error creating organization regions"});
+                    } else {
+                            res.status(200).json({status:"success",message:"Region created"});
+                        
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.post("/ambassadors/rank",(req,res,next) => {
+    createLog('INFO', "POST /ambassador/rank requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strRankID = uuidv4();
+        let strName = req.body.name;
+        let strPayRate = req.body.payrate;
+        strPayRate = strPayRate.replace("$","");
+        strPayRate = strPayRate.replace(" ","");
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblAmbassadorRank VALUES(?,?,'1',?)";
+                
+                conCEROC.query(strCommand, [strRankID,strName,strPayRate], function (err, result) {
+                    if(err){
+                        console.log("Error adding record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error creating ambassador rank"});
+                    } else {
+                            res.status(200).json({status:"success",message:"Rank created"});
+                        
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.post("/ambassadors",(req,res,next) => {
+    createLog('INFO', "POST /ambassadors requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strAmbassadorID = uuidv4();
+        let strFirstName = req.body.firstname;
+        let strLastName = req.body.lastname;
+        let strPrefferedName = req.body.preferredname;
+        let strMiddleName = req.body.middlename;
+        let strTNumber = req.body.tnumber;
+        let strImage = req.body.image;
+        let strPhone = req.body.phone;
+        strPhone = strPhone.replace("(","");
+        strPhone = strPhone.replace(")","");
+        strPhone = strPhone.replace("-","");
+        strPhone = strPhone.replace(" ","");
+
+        let strEmail = req.body.email;
+        let strRank = req.body.rank;
+
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblAmbassador VALUES(?,?,?,?,?,?,?,?,?,?)";
+                
+                conCEROC.query(strCommand, [strAmbassadorID,strFirstName,strLastName,strPrefferedName,strTNumber,strImage,strPhone,strMiddleName,strEmail,strRank], function (err, result) {
+                    if(err){
+                        console.log("Error adding record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error adding ambassador"});
+                    } else {
+                            res.status(200).json({status:"success",message:"Ambassador added",ambassadorid:strAmbassadorID});
+                        
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.post("/inventory/location",(req,res,next) => {
+    createLog('INFO', "POST /inventory/location requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strLocationID = uuidv4();
+        let strBuildingRoom = req.body.building + '-' + req.body.room;
+        let strShelf = req.body.shelf;
+        let strDescription = req.body.description;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblInventoryLocation VALUES(?,?,?,?)";
+                
+                conCEROC.query(strCommand, [strLocationID,strBuildingRoom,strShelf,strDescription], function (err, result) {
+                    if(err){
+                        console.log("Error adding record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error adding location"});
+                    } else {
+                            res.status(200).json({status:"success",message:"Location added",locationid:strLocationID});
+                        
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.post("/inventory/category",(req,res,next) => {
+    createLog('INFO', "POST /inventory/category requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strCategoryID = uuidv4();
+        let strDescription = req.body.description;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblInventoryItemCategory VALUES(?,?,'1')";
+                
+                conCEROC.query(strCommand, [strCategoryID,strDescription], function (err, result) {
+                    if(err){
+                        console.log("Error adding record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error adding category"});
+                    } else {
+                            res.status(200).json({status:"success",message:"Category added",categoryid:strCategoryID});
+                        
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.post("/inventory/audience",(req,res,next) => {
+    createLog('INFO', "POST /inventory/category requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strAudienceID = uuidv4();
+        let strDescription = req.body.description;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblInventoryItemAudience VALUES(?,?,'1')";
+                
+                conCEROC.query(strCommand, [strAudienceID,strDescription], function (err, result) {
+                    if(err){
+                        console.log("Error adding record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error adding audience"});
+                    } else {
+                            res.status(200).json({status:"success",message:"Audience added",audienceid:strAudienceID});
+                        
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.post("/vendor",(req,res,next) => {
+    createLog('INFO', "POST /vendor requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strVendorID = uuidv4();
+        let strName = req.body.name;
+        let strStreet1 = req.body.street1;
+        let strStreet2 = req.body.street2;
+        let strCity = req.body.city;
+        let strState = req.body.state;
+        let strZip = req.body.zip;
+        let strAreaCode = req.body.phone.substring(1,4);
+        let strPhone = req.body.phone.substring(5);
+        strPhone = strPhone.replace("-","");
+        let strEmail = req.body.email;
+        let strExtension = req.body.extension;
+        let strPrimaryContact = req.body.primarycontact;
+        let strWebsite = req.body.website;
+
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblVendors VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'1')";
+                
+                conCEROC.query(strCommand, [strVendorID,strName,strStreet1,strStreet2,strCity,strState,strZip,strAreaCode,strPhone,strExtension,strPrimaryContact,strEmail,strWebsite], function (err, result) {
+                    if(err){
+                        console.log("Error adding record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error adding vendor"});
+                    } else {
+                            res.status(200).json({status:"success",message:"Vendor added",vendorid:strVendorID});
+                        
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.post("/ambassadors/notes",(req,res,next) => {
+    createLog('INFO', "POST /ambassadors/notes requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strNoteID = uuidv4();
+        let strDescription = req.body.description;
+        let strAmbassadorID = req.body.ambassadorid;
+        let strSessionID = req.body.userid;
+
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblAmbassadorNotes VALUES(?,?,NOW(),?,?)";
+                
+                conCEROC.query(strCommand, [strNoteID,strDescription,strSessionID,strAmbassadorID], function (err, result) {
+                    if(err){
+                        console.log("Error adding record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error adding note"});
+                    } else {
+                            res.status(200).json({status:"success",message:"Note added"});
+                        
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.post("/inventory/items",(req,res,next) => {
+    createLog('INFO', "POST /ambassadors/notes requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strItemID = uuidv4();
+        let strName = req.body.name;
+        let strVendor = req.body.vendor;
+        let strCategory = req.body.category;
+        let strAudience = req.body.audience;
+        let strLocation = req.body.location;
+        let strReorderQty = req.body.reorderqty;
+        let strMaxQty = req.body.maxqty;
+        let strImage = req.body.image;
+
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblInventory VALUES(?,?,?,?,?,'1',?,?,?,?)";
+                
+                conCEROC.query(strCommand, [strItemID,strName,strVendor,strMaxQty,strReorderQty,strLocation,strImage,strAudience,strCategory], function (err, result) {
+                    if(err){
+                        console.log("Error adding record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error adding inventory item"});
+                    } else {
+                            res.status(200).json({status:"success",message:"Inventory Item added",itemid:strItemID});
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.post("/sessions",(req,res,next) => {
+    console.log(req)
+    const strEmail = req.body.email;
+    const strPassword = req.body.password;
+    if(strEmail, strPassword == null){
+        res.status(400).json({status:"error",message:"Missing required fields"});
+    } else {
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                var strCommand = 'SELECT * FROM tblUsers WHERE email = ?';
+                console.log('813');
+                conCEROC.query(strCommand, [strEmail], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error validating user"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(401).json({status:"error",message:"User not found"});
+                        } else {
+                            if(validatePassword(strPassword,result[0].LocalPassword)){
+                                const strSessionID = uuidv4();
+                                conCEROC.getConnection(function(err,connection) {
+                                    if (err){
+                                        console.log("Error connecting to database");
+                                        console.log(err);
+                                        
+                                        res.status(500).json({status:"error",message:"Error connecting to database"});
+                                    } else {
+                                        let strCommand = 'INSERT INTO tblSessions VALUES (?,NOW(),NOW(),?)';
+                                        conCEROC.query(strCommand, [strSessionID,strEmail], function (err, result) {
+                                            if(err){
+                                                console.log(err);
+                                                res.status(401).json({status:"error",message:"Username and/or Password are invalid"});
+                                            } else {
+                                                console.log("New Session Created " + strSessionID);
+                                                res.status(200).json({status:"success",message:"User Validation Successful",sessionid:strSessionID});
+                                            }
+                                        });
+                                    }
+                                });
+                            } else {
+                                res.status(401).json({status:"error",message:"Username and/or Password are invalid"});
+                            }
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    }
+})
+
+app.post("/clientcontacts",(req,res,next) => {
+    if(verifySession(req) == true){
+        let strContactID = uuidv4();
+        let strFirstName = req.body.FirstName;
+        let strLastName = req.body.LastName;
+        let strPrefferedName = req.body.PreferredName;
+        let strOrganizationID = req.body.OrganizationID;
+        let strTitle = req.body.Title;
+        let strRole = req.body.Role;
+        let strImage = req.body.Image;
+        if(strFirstName, strLastName, strTitle, strRole == null){
+            res.status(400).json({status:"error",message:"Missing required fields"});
+        } else {
+            conCEROC.getConnection(function(err,connection) {
+                if (err){
+                    console.log("Error connecting to database");
+                    console.log(err);
+                    
+                    res.status(500).json({status:"error",message:"Error connecting to database"});
+                } else {
+                    let strCommand = 'INSERT INTO tblClientContacts VALUES (?,?,?,?,?,?,?,?)';
+                    
+                    conCEROC.query(strCommand, [strContactID,strFirstName,strLastName,strPrefferedName,strTitle,strRole,strImage,strOrganizationID], function (err, result) {
+                        if(err){
+                            console.log("Error inserting record");
+                            console.log(err);
+                            
+                            res.status(500).json({status:"error",message:"Error creating contact"});
+                        } else {
+                            console.log("New Contact Created " + strContactID);
+                            res.status(201).json({status:"success",message:"New Contact Added",contactID:strContactID});
+                        }
+                    });
+                }
+                connection.release();
+            });
+        }
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.post("/clientcontacts/email/:contactid",(req,res,next) => {
+    if(verifySession(req) == true){
+        const strContactID = req.params.contactid;
+        const strAddress = req.body.address;
+        if(strContactID,strAddress == null){
+            res.status(400).json({status:"error",message:"Missing required fields"});
+        } else {
+            conCEROC.getConnection(function(err,connection) {
+                if (err){
+                    console.log("Error connecting to database");
+                    console.log(err);
+                    
+                    res.status(500).json({status:"error",message:"Error connecting to database"});
+                } else {
+                    let strCommand = "INSERT INTO tblClientContactEmail VALUES (?,?,?,'Active')";
+                    let strEmailID = uuidv4();
+                    conCEROC.query(strCommand, [strEmailID,strAddress,strContactID], function (err, result) {
+                        if(err){
+                            console.log("Error inserting record");
+                            console.log(err);
+                            
+                            res.status(500).json({status:"error",message:"Error adding contact email"});
+                        } else {
+                            console.log("New Contact Email Added " + strEmailID);
+                            res.status(201).json({status:"success",message:"New Contact Email Added",emailID:strEmailID});
+                        }
+                    });
+                }
+                connection.release();
+            });
+        }
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.post("/clientcontacts/phone/:contactid",(req,res,next) => {
+    const strContactID = req.params.contactid;
+    const strAreaCode = req.body.areacode;
+    const strPhone = req.body.phone;
+    if(!strPhone || !strAreaCode){
+        res.status(400).json({status:"error",message:"Missing required fields"});
+    } else {
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblClientContactPhone VALUES (?,?,?,?,'Active')";
+                let strPhoneID = uuidv4();
+                conCEROC.query(strCommand, [strPhoneID,strAreaCode,strPhone,strContactID], function (err, result) {
+                    if(err){
+                        console.log("Error inserting record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error adding contact phone"});
+                    } else {
+                        console.log("New Contact Phone Added " + strPhoneID);
+                        res.status(201).json({status:"success",message:"New Contact Phone Added",phoneID:strPhoneID});
+                    }
+                });
+            }
+            connection.release();
+        });
+    }
+})
+
+app.post("/clientcontacts/address/:contactid",(req,res,next) => {
+    const strContactID = req.params.contactid;
+    const strStreet1 = req.body.street1;
+    const strStreet2 = req.body.street2;
+    const strCity = req.body.city;
+    const strState = req.body.state;
+    const strZip = req.body.zip;
+
+    if(strContactID,strStreet1,strCity,strState,strZip == null){
+        res.status(400).json({status:"error",message:"Missing required fields"});
+    } else {
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblClientContactAddress VALUES (?,?,?,?,?,?,?,'Active')";
+                let strAddressID = uuidv4();
+                conCEROC.query(strCommand, [strAddressID,strStreet1,strStreet2,strCity,strState,strZip,strContactID], function (err, result) {
+                    if(err){
+                        console.log("Error inserting record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error adding contact address"});
+                    } else {
+                        console.log("New Contact Address Added " + strAddressID);
+                        res.status(201).json({status:"success",message:"New Contact Address Added",addressID:strAddressID});
+                    }
+                });
+            }
+            connection.release();
+        });
+    }
+})
+
+app.post("/clientcontacts/social/:contactid",(req,res,next) => {
+    const strContactID = req.params.contactid;
+    const strSocialType = req.body.socialtype;
+    const strName = req.body.name;
+    const strLink = req.body.link;
+
+    if(strContactID,strSocialType,strName,strLink == null){
+        res.status(400).json({status:"error",message:"Missing required fields"});
+    } else {
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblClientContactSocials VALUES (?,?,?,?,?,'Active')";
+                let strSocialID = uuidv4();
+                conCEROC.query(strCommand, [strSocialID,strSocialType,strName,strLink,strContactID], function (err, result) {
+                    if(err){
+                        console.log("Error inserting record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error adding contact social"});
+                    } else {
+                        console.log("New Contact Social Added " + strSocialID);
+                        res.status(201).json({status:"success",message:"New Contact Social Added",socialID:strSocialID});
+                    }
+                });
+            }
+            connection.release();
+        });
+    }
+})
+
+app.post("/clientcontacts/note/:contactid",(req,res,next) => {
+    const strContactID = req.params.contactid;
+    const strDescription = req.body.description;
+    const strAddedBy = req.body.addedby;
+
+    if(!strDescription || !strAddedBy){
+        res.status(200).json({status:"success",message:"No note added"});
+    } else {
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = "INSERT INTO tblClientContactNotes VALUES (?,?,NOW(),?,?)";
+                let strNoteID = uuidv4();
+                conCEROC.query(strCommand, [strNoteID,strDescription,strAddedBy,strContactID], function (err, result) {
+                    if(err){
+                        console.log("Error inserting record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error adding contact note"});
+                    } else {
+                        console.log("New Contact Note Added " + strNoteID);
+                        res.status(201).json({status:"success",message:"New Contact Note Added",noeID:strNoteID});
+                    }
+                });
+            }
+            connection.release();
+        });
+    }
+})
+
+app.post("/users",(req,res,next) => {
+    createLog('INFO', "POST /users requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strEmail = req.body.email;
+        let strPassword = req.body.password;
+        let strFirstName = req.body.firstName;
+        let strLastName = req.body.lastName;
+        let strUserID = uuidv4();
+        if(strEmail, strPassword, strFirstName, strLastName == null){
+            res.status(400).json({status:"error",message:"Missing required fields"});
+        } else {
+            try{
+                strPassword = hashPassword(strPassword);
+                var strCommand = "INSERT INTO tblUsers VALUES (?, ?, ?, ?, NOW(),'SYSTEM',1,?)";
+                conCEROC.query(strCommand,[strUserID,strEmail,strFirstName,strLastName,strPassword], function(error, results){
+                    if(!error){
+                        res.status(201).json({status:"success",message:"User Added for " + strEmail,userid:strUserID});
+                    } else {
+                        res.status(500).json({status:"error",message:"Error creating user"});
+                    }
+                })
+            } catch (error){
+                res.status(500).json({status:"error",message:"Error creating user"});
+            }
+        }
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/organizationtypes",(req,res,next) => {
+    createLog('INFO', "GET /organizationtypes requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblOrganizationType ORDER BY Description ASC';
+                
+                conCEROC.query(strCommand, [], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving organization type"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Organization Type not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/users",(req,res,next) => {
+    createLog('INFO', "GET /users requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT UserID, Email, FirstName, LastName, Status FROM tblUsers ORDER BY LastName, FirstName ASC';
+                
+                conCEROC.query(strCommand, [], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving users");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving users"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Users Not Found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/ambassador",(req,res,next) => {
+    if(verifySession(req) == true){
+        let strAmbassadorRankID = req.params.ambassadorrankid;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblAmbassador LEFT JOIN tblAmbassadorRank on tblAmbassador.JobRank = tblAmbassadorRank.RankID ORDER BY LastName, FirstName ASC';
+                
+                conCEROC.query(strCommand, [], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving ambassador rank"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(200).json({status:"error",message:"Ambassador Rank not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/ambassador/ranks",(req,res,next) => {
+    if(verifySession(req) == true){
+        let strAmbassadorRankID = req.params.ambassadorrankid;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblAmbassadorRank ORDER BY Description ASC';
+                
+                conCEROC.query(strCommand, [], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving ambassador rank"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(200).json({status:"error",message:"Ambassador Rank not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/inventory/location",(req,res,next) => {
+    if(verifySession(req) == true){
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblInventoryLocation ORDER BY BuildingRoom ASC';
+                
+                conCEROC.query(strCommand, [], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving locations"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(200).json({status:"error",message:"Location not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/inventory/category",(req,res,next) => {
+    if(verifySession(req) == true){
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblInventoryItemCategory ORDER BY Description ASC';
+                
+                conCEROC.query(strCommand, [], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving cateogories"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(200).json({status:"error",message:"Category not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/inventory/audience",(req,res,next) => {
+    if(verifySession(req) == true){
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblInventoryItemAudience ORDER BY Description ASC';
+                
+                conCEROC.query(strCommand, [], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving audience"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(200).json({status:"error",message:"Audience not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/vendor",(req,res,next) => {
+    if(verifySession(req) == true){
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblVendors ORDER BY Name ASC';
+                
+                conCEROC.query(strCommand, [], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving vendors"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(200).json({status:"error",message:"Vendor not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/organization/region/:regionid",(req,res,next) => {
+    createLog('INFO', "GET /organization/region/:regionid requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strRegionID = req.params.regionid;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblOrganizationRegions WHERE RegionID = ? ORDER BY Description DESC';
+                
+                conCEROC.query(strCommand, [strRegionID], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving organization regions"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Region not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/organization/region",(req,res,next) => {
+    createLog('INFO', "GET /organization/region requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblOrganizationRegions ORDER BY Description ASC';
+                
+                conCEROC.query(strCommand, [], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving organization regions"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Region not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/event/type/:typeid",(req,res,next) => {
+    if(verifySession(req) == true){
+        let strEventTypeID = req.params.typeid;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblEventTypes ORDER BY Description DESC';
+                if(strEventTypeID != null){
+                    strCommand = 'SELECT * FROM tblEventTypes WHERE TypeID = ? ORDER BY Description DESC';
+                }
+                conCEROC.query(strCommand, [strEventTypeID], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving event types"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Type not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/session",(req,res,next) => {
+    if(verifySession(req) == true){
+        let strSessionID = req.headers.authorization.split(' ')[1];
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT tblSessions.*, tblUsers.Email, tblUsers.UserID, tblUsers.FirstName, tblUsers.LastName, tblPermissions.PermissionID, tblPermissions.Description FROM tblSessions LEFT JOIN tblUsers ON tblSessions.UserID = tblUsers.Email LEFT JOIN tblUserPermissions ON tblUsers.UserID = tblUserPermissions.UserID LEFT JOIN tblPermissions ON tblUserPermissions.PermissionID = tblPermissions.PermissionID WHERE SessionID = ? AND tblUserPermissions.Status = 1';
+                conCEROC.query(strCommand, [strSessionID], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving session"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(401).json({status:"error",message:"Session not found"});
+                        } else {
+                            let arrPermissions = [];
+                            result.forEach(function(row){
+                                arrPermissions.push(new Permission(row.PermissionID, row.Description));
+                            })
+                            let objUser = new User(result[0].UserID,result[0].Email, result[0].FirstName, result[0].LastName);
+                            let objSession = new Session(strSessionID,objUser, arrPermissions, result[0].StartDateTime, result[0].LastUsedDateTime);
+                            res.status(200).json(objSession);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/purchaseorderitemcategories/:purchaseorderitemcategoryid",(req,res,next) => {
+    if(verifySession(req) == true){
+        let strPurchaseOrderItemCategoryID = req.params.purchaseorderitemcategoryid;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblPurchaseOrderItemCategory';
+                if(strPurchaseOrderItemCategoryID != null){
+                    strCommand = 'SELECT * FROM tblPurchaseOrderItemCategory WHERE PurchaseOrderItemCategoryID = ?';
+                }
+                conCEROC.query(strCommand, [strPurchaseOrderItemCategoryID], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving purchase order item category"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Purchase Order Item Category not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/socialtypes/",(req,res,next) => {
+    if(verifySession(req) == true){
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblSocialType ORDER BY Description ASC';
+                conCEROC.query(strCommand, [], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving social type"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Social Type not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.get("/socialtypes/:socialtypeid",(req,res,next) => {
+    if(verifySession(req) == true){
+        let strSocialTypeID = req.params.socialtypeid;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'SELECT * FROM tblSocialType';
+                if(strSocialTypeID != null){
+                    strCommand = 'SELECT * FROM tblSocialType WHERE SocialTypeID = ?';
+                }
+                conCEROC.query(strCommand, [strSocialTypeID], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving social type"});
+                    } else {
+                        if(result.length == 0){
+                            res.status(404).json({status:"error",message:"Social Type not found"});
+                        } else {
+                            res.status(200).json(result);
+                        }
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.put("/organization/region/:regionid",(req,res,next) => {
+    createLog('INFO', "GET /organization/region/:regionid requested by sessionid " + req.headers.authorization.split(' ')[1])
+    if(verifySession(req) == true){
+        let strRegionID = req.params.regionid;
+        let strDescription = req.body.Description;
+        let strStatus = req.body.Status;
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                let strCommand = 'UPDATE tblOrganizationRegions SET Description = ?, Status = ? WHERE RegionID = ?';
+                
+                conCEROC.query(strCommand, [strDescription,strStatus,strRegionID], function (err, result) {
+                    if(err){
+                        console.log("Error retrieving record");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error retrieving organization regions"});
+                    } else {
+                        
+                            res.status(200).json({status:"success",message:"Region Updated"});
+                        
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.delete("/sessions",(req,res,next) => {
+    if(verifySession(req) == true){
+        let strSessionID = req.headers.authorization.split(' ')[1];
+        conCEROC.getConnection(function(err,connection) {
+            if (err){
+                console.log("Error connecting to database");
+                console.log(err);
+                
+                res.status(500).json({status:"error",message:"Error connecting to database"});
+            } else {
+                    let strCommand = 'DELETE FROM tblSessions WHERE SessionID = ?';
+                
+                conCEROC.query(strCommand, [strSessionID], function (err, result) {
+                    if(err){
+                        console.log("Error deleting session");
+                        console.log(err);
+                        
+                        res.status(500).json({status:"error",message:"Error deleting session"});
+                    } else {
+                            res.status(201).json({status:"success",message:"Session Deleted",sessionid:strSessionID});
+                    }
+                });
+            }
+            connection.release();
+        });
+    } else {
+        res.status(401).json({status:"error",message:"Unauthorized"});
+    }
+})
+
+app.listen(HTTP_PORT, () => {
+    console.log('listening on port', HTTP_PORT);
+})
