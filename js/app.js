@@ -1,4 +1,4 @@
-document.querySelector('#btnSwapMtS').addEventListener('click', (event) => {
+document.querySelector('#btnSwapMtE').addEventListener('click', (event) => {
     // fetch ("components/SearchPokemon.html")
     // .then(response => response.text())
     // .then(html => {
